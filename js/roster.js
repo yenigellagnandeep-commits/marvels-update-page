@@ -15,6 +15,7 @@ class CharacterRoster {
     this.characters = [];
     this.activeCategory = 'All Comics';
     this.searchQuery = '';
+    this.visibleLimit = 48;
 
     this.init();
   }
@@ -31,7 +32,10 @@ class CharacterRoster {
       const res = await fetch('data/characters.json');
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      this.characters = data.characters || [];
+      this.characters = this.normalizeCharacterData(data);
+      if (this.characters.length === 0) {
+        throw new Error('characters.json did not contain any character records');
+      }
     } catch (err) {
       console.error('Failed to load characters.json:', err);
       this.container.innerHTML = `
@@ -44,11 +48,101 @@ class CharacterRoster {
     }
   }
 
+  normalizeCharacterData(data) {
+    if (Array.isArray(data)) {
+      return data.map((record, index) => this.normalizeCatalogCharacter(record, index));
+    }
+    if (Array.isArray(data?.characters)) {
+      return data.characters;
+    }
+    throw new Error('Unsupported characters.json format');
+  }
+
+  normalizeCatalogCharacter(record, index) {
+    const valueOrEmpty = (value) =>
+      typeof value === 'string' && value.trim() && value.trim() !== '-' ? value.trim() : '';
+    const biography = record?.biography || {};
+    const powerstats = record?.powerstats || {};
+    const images = record?.images || {};
+    const name = valueOrEmpty(record?.name) || `Unknown Character ${index + 1}`;
+    const groups = valueOrEmpty(record?.connections?.['group-affiliation']);
+    const alignment = valueOrEmpty(biography.alignment).toLowerCase();
+    const searchableGroups = groups.toLowerCase();
+    const categories = ['All Comics'];
+    ['Avengers', 'X-Men', 'Cosmic', 'Villains', 'Street Level'].forEach((category) => {
+      if (searchableGroups.includes(category.toLowerCase()) ||
+          (category === 'Villains' && alignment === 'bad')) {
+        categories.push(category);
+      }
+    });
+
+    const toRating = (value) => {
+      const number = Number(value);
+      if (value === null || value === undefined || value === '' ||
+          !Number.isFinite(number) || number < 0) return 0;
+      return Math.max(1, Math.min(7, Math.round(number * 6 / 100) + 1));
+    };
+    const stat = (key) => {
+      const value = powerstats[key];
+      const rating = toRating(value);
+      return {
+        rating,
+        label: rating ? `${value}/100` : 'Not listed'
+      };
+    };
+    const fallbackImage = 'https://images.unsplash.com/photo-1604200213928-ba3cf4fc8436?auto=format&fit=crop&w=600&q=80';
+    const thumbnail = valueOrEmpty(images.sm) || fallbackImage;
+    const highResImage = valueOrEmpty(images.lg) || valueOrEmpty(images.md) ||
+      valueOrEmpty(images.sm) || fallbackImage;
+    const powers = Object.entries(powerstats)
+      .filter(([, value]) => toRating(value) > 0)
+      .map(([key, value]) => `${key.replace(/[-_]/g, ' ')} (${value}/100)`);
+
+    return {
+      id: `catalog-${index}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+      alias: name,
+      name: valueOrEmpty(biography['full-name']) || valueOrEmpty(biography['alter-egos']) || 'Identity not listed',
+      categories,
+      primaryCategory: categories.find((category) => category !== 'All Comics') || 'All Comics',
+      tagline: valueOrEmpty(biography.publisher) || 'Marvel archive entry',
+      quote: '',
+      comicDebut: {
+        comicTitle: valueOrEmpty(biography['first-appearance']) || 'Not listed',
+        issue: '',
+        releaseYear: '',
+        creators: '',
+        coverDate: ''
+      },
+      thumbnail,
+      highResImage,
+      modelConfig: {
+        themeColor: '#e23636',
+        accentColor: '#1b4d89',
+        wireframeColor: '#00f0ff',
+        particleCount: 180,
+        symbol: 'CORE',
+        glbModelUrl: ''
+      },
+      biography: 'This catalog record does not include a biography. Add character details to the source data to complete this dossier.',
+      powers,
+      powerGrid: {
+        durability: stat('durability'),
+        energyProjection: stat('power'),
+        fightingSkills: stat('combat'),
+        intelligence: stat('intelligence'),
+        speed: stat('speed'),
+        strength: stat('strength')
+      },
+      keyStorylines: []
+    };
+  }
+
   setupEvents() {
     // Search Input with Debounce/Instant response
     if (this.searchInput) {
       this.searchInput.addEventListener('input', (e) => {
         this.searchQuery = e.target.value.trim().toLowerCase();
+        this.visibleLimit = 48;
         if (this.searchClearBtn) {
           if (this.searchQuery.length > 0) {
             this.searchClearBtn.classList.add('visible');
@@ -66,6 +160,7 @@ class CharacterRoster {
       this.searchClearBtn.addEventListener('click', () => {
         this.searchInput.value = '';
         this.searchQuery = '';
+        this.visibleLimit = 48;
         this.searchClearBtn.classList.remove('visible');
         this.searchInput.parentElement.classList.remove('has-text');
         this.searchInput.focus();
@@ -86,7 +181,17 @@ class CharacterRoster {
 
   getAvailableCategories() {
     const defaultCategories = ['All Comics', 'Avengers', 'X-Men', 'Cosmic', 'Villains', 'Street Level'];
-    return defaultCategories;
+    const available = new Set(this.characters.flatMap((character) => [
+      character.primaryCategory,
+      ...(Array.isArray(character.categories) ? character.categories : [])
+    ]));
+    const defaults = defaultCategories.filter((category) =>
+      category === 'All Comics' || available.has(category)
+    );
+    const additional = [...available]
+      .filter((category) => category && !defaultCategories.includes(category))
+      .sort();
+    return [...defaults, ...additional];
   }
 
   getFilteredCharacters() {
@@ -102,15 +207,13 @@ class CharacterRoster {
       if (!this.searchQuery) return true;
 
       const q = this.searchQuery;
-      const aliasMatch = char.alias && char.alias.toLowerCase().includes(q);
-      const nameMatch = char.name && char.name.toLowerCase().includes(q);
-      const categoryMatch = char.categories && char.categories.some(c => c.toLowerCase().includes(q));
-      const powerMatch = char.powers && char.powers.some(p => p.toLowerCase().includes(q));
-      const debutMatch = char.comicDebut && (
-        char.comicDebut.comicTitle.toLowerCase().includes(q) ||
-        char.comicDebut.creators.toLowerCase().includes(q) ||
-        char.comicDebut.issue.toLowerCase().includes(q)
-      );
+      const contains = (value) => typeof value === 'string' && value.toLowerCase().includes(q);
+      const debut = char.comicDebut || {};
+      const aliasMatch = contains(char.alias);
+      const nameMatch = contains(char.name);
+      const categoryMatch = Array.isArray(char.categories) && char.categories.some(contains);
+      const powerMatch = Array.isArray(char.powers) && char.powers.some(contains);
+      const debutMatch = [debut.comicTitle, debut.creators, debut.issue].some(contains);
 
       return aliasMatch || nameMatch || categoryMatch || powerMatch || debutMatch;
     });
@@ -131,9 +234,10 @@ class CharacterRoster {
       }
 
       const isActive = cat === this.activeCategory ? 'active' : '';
+      const safeCategory = escapeHtml(cat);
       return `
-        <button class="filter-btn ${isActive}" data-category="${cat}">
-          <span>${cat}</span>
+        <button class="filter-btn ${isActive}" data-category="${safeCategory}">
+          <span>${safeCategory}</span>
           <span class="filter-count">${count}</span>
         </button>
       `;
@@ -143,6 +247,7 @@ class CharacterRoster {
     this.filterContainer.querySelectorAll('.filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         this.activeCategory = btn.dataset.category;
+        this.visibleLimit = 48;
         this.filterContainer.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.renderGrid();
@@ -156,7 +261,8 @@ class CharacterRoster {
 
     // Update stats summary text
     if (this.statsSummary) {
-      this.statsSummary.innerHTML = `Showing <strong>${filtered.length}</strong> of <strong>${this.characters.length}</strong> Marvel records`;
+      const shownCount = Math.min(this.visibleLimit, filtered.length);
+      this.statsSummary.innerHTML = `Showing <strong>${shownCount}</strong> of <strong>${filtered.length}</strong> matching characters (${this.characters.length} total)`;
     }
 
     if (filtered.length === 0) {
@@ -164,7 +270,7 @@ class CharacterRoster {
         <div class="empty-state">
           <div class="empty-icon">🔍</div>
           <h3 class="empty-title">No Matching Dossiers Found</h3>
-          <p class="empty-desc">No superhero or villain matches "<strong>${this.searchQuery}</strong>" in the category "${this.activeCategory}".</p>
+          <p class="empty-desc">No superhero or villain matches "<strong>${escapeHtml(this.searchQuery)}</strong>" in the category "${escapeHtml(this.activeCategory)}".</p>
           <button class="btn-secondary" id="reset-filter-btn" style="margin-top: 0.8rem;">
             Clear Search & Filters
           </button>
@@ -176,6 +282,7 @@ class CharacterRoster {
         resetBtn.addEventListener('click', () => {
           this.activeCategory = 'All Comics';
           this.searchQuery = '';
+          this.visibleLimit = 48;
           if (this.searchInput) this.searchInput.value = '';
           if (this.searchClearBtn) this.searchClearBtn.classList.remove('visible');
           this.renderFilters();
@@ -185,7 +292,20 @@ class CharacterRoster {
       return;
     }
 
-    this.container.innerHTML = filtered.map(char => this.createCardHTML(char)).join('');
+    const visibleCharacters = filtered.slice(0, this.visibleLimit);
+    this.container.innerHTML = visibleCharacters.map(char => this.createCardHTML(char)).join('');
+    if (visibleCharacters.length < filtered.length) {
+      this.container.insertAdjacentHTML('beforeend', `
+        <button class="btn-secondary" id="load-more-characters" type="button"
+          style="grid-column: 1 / -1; justify-self: center; margin-top: 1rem;">
+          Load more characters
+        </button>
+      `);
+      document.getElementById('load-more-characters').addEventListener('click', () => {
+        this.visibleLimit += 48;
+        this.renderGrid();
+      });
+    }
 
     // Attach click listeners to cards
     this.container.querySelectorAll('.character-card').forEach(card => {
@@ -202,49 +322,63 @@ class CharacterRoster {
   createCardHTML(char) {
     // Badge category classes
     const primaryCat = char.primaryCategory || 'Avengers';
+    const safeCategory = escapeHtml(primaryCat);
+    const safeId = escapeHtml(char.id);
+    const safeThumbnail = escapeHtml(char.thumbnail || 'https://images.unsplash.com/photo-1604200213928-ba3cf4fc8436?auto=format&fit=crop&w=600&q=80');
+    const safeAlias = escapeHtml(char.alias || 'Unknown Character');
+    const safeName = escapeHtml(char.name || 'Identity not listed');
+    const safeTagline = escapeHtml(char.tagline || char.quote || 'Marvel archive entry');
     let badgeClass = 'badge-avengers';
     if (primaryCat === 'X-Men') badgeClass = 'badge-xmen';
     else if (primaryCat === 'Cosmic') badgeClass = 'badge-cosmic';
     else if (primaryCat === 'Villains') badgeClass = 'badge-villains';
 
     // Power grid preview ratings (out of 7)
-    const strengthPct = Math.round(((char.powerGrid?.strength?.rating || 3) / 7) * 100);
-    const speedPct = Math.round(((char.powerGrid?.speed?.rating || 3) / 7) * 100);
-    const combatPct = Math.round(((char.powerGrid?.fightingSkills?.rating || 4) / 7) * 100);
+    const getRating = (key) => {
+      const rating = Number(char.powerGrid?.[key]?.rating);
+      return Number.isFinite(rating) && rating > 0 ? Math.min(7, rating) : 0;
+    };
+    const strengthRating = getRating('strength');
+    const speedRating = getRating('speed');
+    const combatRating = getRating('fightingSkills');
+    const strengthPct = Math.round((strengthRating / 7) * 100);
+    const speedPct = Math.round((speedRating / 7) * 100);
+    const combatPct = Math.round((combatRating / 7) * 100);
+    const formatRating = (rating) => rating ? `${rating}/7` : 'N/A';
 
-    const debutYear = char.comicDebut?.releaseYear || '1962';
+    const debutYear = escapeHtml(char.comicDebut?.releaseYear || 'Not listed');
 
     return `
-      <article class="character-card" data-id="${char.id}">
+      <article class="character-card" data-id="${safeId}">
         <div class="card-media">
           <img 
             class="card-img" 
-            src="${char.thumbnail}" 
-            alt="${char.alias}" 
+            src="${safeThumbnail}" 
+            alt="${safeAlias}" 
             loading="lazy"
             onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1604200213928-ba3cf4fc8436?auto=format&fit=crop&w=600&q=80';"
           />
           <div class="card-gradient"></div>
           <div class="card-badge-debut">Debut: ${debutYear}</div>
           <div class="card-categories">
-            <span class="badge ${badgeClass}">${primaryCat}</span>
+            <span class="badge ${badgeClass}">${safeCategory}</span>
           </div>
         </div>
 
         <div class="card-body">
           <div class="card-identity">
-            <h3 class="card-alias">${char.alias}</h3>
-            <span class="card-realname">${char.name}</span>
+            <h3 class="card-alias">${safeAlias}</h3>
+            <span class="card-realname">${safeName}</span>
           </div>
 
-          <p class="card-tagline">"${char.tagline || char.quote}"</p>
+          <p class="card-tagline">"${safeTagline}"</p>
 
           <div class="card-powers-preview">
             <div class="power-bars-mini">
               <div class="mini-stat">
                 <div class="mini-stat-label">
                   <span>STR</span>
-                  <span>${char.powerGrid?.strength?.rating || 3}/7</span>
+                  <span>${formatRating(strengthRating)}</span>
                 </div>
                 <div class="mini-stat-bar">
                   <div class="mini-stat-fill" style="width: ${strengthPct}%;"></div>
@@ -254,7 +388,7 @@ class CharacterRoster {
               <div class="mini-stat">
                 <div class="mini-stat-label">
                   <span>SPD</span>
-                  <span>${char.powerGrid?.speed?.rating || 3}/7</span>
+                  <span>${formatRating(speedRating)}</span>
                 </div>
                 <div class="mini-stat-bar">
                   <div class="mini-stat-fill" style="width: ${speedPct}%;"></div>
@@ -264,7 +398,7 @@ class CharacterRoster {
               <div class="mini-stat">
                 <div class="mini-stat-label">
                   <span>CMB</span>
-                  <span>${char.powerGrid?.fightingSkills?.rating || 4}/7</span>
+                  <span>${formatRating(combatRating)}</span>
                 </div>
                 <div class="mini-stat-bar">
                   <div class="mini-stat-fill" style="width: ${combatPct}%;"></div>

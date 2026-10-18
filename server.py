@@ -1,6 +1,6 @@
 """
 Marvel Universe Archive - Local Development Server
-Provides clean MIME type handling, UTF-8 encoding, and CORS headers.
+Provides clean MIME type handling, UTF-8 encoding, and loopback-only access.
 """
 
 import http.server
@@ -12,10 +12,7 @@ PORT = 8000
 
 class MarvelArchiveHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
-        # Enable CORS and caching headers
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        # Same-origin local development needs no CORS access.
         self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
         super().end_headers()
 
@@ -43,7 +40,7 @@ def run_server(port=PORT):
     # Try port, fallback to next port if in use
     for p in range(port, port + 10):
         try:
-            with socketserver.TCPServer(("", p), handler) as httpd:
+            with socketserver.TCPServer(("127.0.0.1", p), handler) as httpd:
                 print(f"[MARVEL ARCHIVE SERVER] Serving at http://127.0.0.1:{p}/")
                 print(f"[MARVEL ARCHIVE SERVER] Press Ctrl+C to stop.")
                 sys.stdout.flush()

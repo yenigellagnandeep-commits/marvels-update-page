@@ -4,6 +4,16 @@
  * 360-degree orbital rotation, particle systems, wireframes, and animated hero cores.
  */
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
+}
+
 class HeroViewer3D {
   constructor(containerElement) {
     this.container = containerElement;
@@ -100,12 +110,13 @@ class HeroViewer3D {
     const wireframeColorHex = modelConfig.wireframeColor || '#00f0ff';
     const accentColorHex = modelConfig.accentColor || '#ffd700';
 
-    // Check if external GLB/GLTF model is provided
-    if (modelConfig.glbModelUrl && typeof customElements !== 'undefined') {
+    // Only load external models over HTTPS; otherwise use the built-in viewer.
+    const modelUrl = typeof modelConfig.glbModelUrl === 'string' ? modelConfig.glbModelUrl.trim() : '';
+    if (/^https:\/\/[^\s"'<>]+$/i.test(modelUrl) && typeof customElements !== 'undefined') {
       this.container.innerHTML = `
         <model-viewer 
-          src="${modelConfig.glbModelUrl}" 
-          alt="${character.alias} 3D Model"
+          src="${escapeHtml(modelUrl)}" 
+          alt="${escapeHtml(character.alias)} 3D Model"
           auto-rotate
           camera-controls
           shadow-intensity="1"

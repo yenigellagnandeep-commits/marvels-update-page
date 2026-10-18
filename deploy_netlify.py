@@ -11,18 +11,17 @@ import sys
 
 ZIP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'marvel-universe-archive-deploy.zip')
 
-def deploy_to_netlify(token=None, site_name=None):
-    token = token or os.environ.get('NETLIFY_AUTH_TOKEN')
+def deploy_to_netlify(site_name=None):
+    token = os.environ.get('NETLIFY_AUTH_TOKEN')
     if not token:
         print("[ERROR] No Netlify access token found.")
-        print("Please provide your token or set NETLIFY_AUTH_TOKEN environment variable.")
+        print("Set the NETLIFY_AUTH_TOKEN environment variable before deploying.")
         print("You can generate one for free at: https://app.netlify.com/user/applications#personal-access-tokens")
         return None
 
-    if not os.path.exists(ZIP_PATH):
-        print(f"[INFO] Packaging zip file first...")
-        from package_deploy import create_deploy_zip
-        create_deploy_zip()
+    print("[INFO] Packaging the current project files...")
+    from package_deploy import create_deploy_zip
+    create_deploy_zip()
 
     with open(ZIP_PATH, 'rb') as f:
         zip_bytes = f.read()
@@ -69,6 +68,5 @@ def deploy_to_netlify(token=None, site_name=None):
         return None
 
 if __name__ == '__main__':
-    token = sys.argv[1] if len(sys.argv) > 1 else None
-    name = sys.argv[2] if len(sys.argv) > 2 else 'marvel-universe-archive'
-    deploy_to_netlify(token, name)
+    name = sys.argv[1] if len(sys.argv) > 1 else 'marvel-universe-archive'
+    deploy_to_netlify(name)

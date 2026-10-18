@@ -174,7 +174,7 @@ class CharacterModal {
     const powersListEl = document.getElementById('dossier-powers');
     if (powersListEl && char.powers) {
       powersListEl.innerHTML = char.powers.map(p => `
-        <span class="power-pill">${p}</span>
+        <span class="power-pill">${escapeHtml(p)}</span>
       `).join('');
     }
 
@@ -187,11 +187,11 @@ class CharacterModal {
       storylinesEl.innerHTML = char.keyStorylines.map(story => `
         <div class="storyline-card">
           <div class="storyline-header">
-            <h4 class="storyline-title">${story.title}</h4>
-            <span class="storyline-year">${story.year}</span>
+            <h4 class="storyline-title">${escapeHtml(story.title)}</h4>
+            <span class="storyline-year">${escapeHtml(story.year)}</span>
           </div>
-          <span class="storyline-issues">${story.issues || ''}</span>
-          <p class="storyline-synopsis">${story.synopsis}</p>
+          <span class="storyline-issues">${escapeHtml(story.issues || '')}</span>
+          <p class="storyline-synopsis">${escapeHtml(story.synopsis)}</p>
         </div>
       `).join('');
     }
@@ -211,17 +211,19 @@ class CharacterModal {
     ];
 
     gridContainer.innerHTML = stats.map(st => {
-      const item = grid[st.key] || { rating: 1, label: 'Standard' };
+      const item = grid[st.key] || { rating: 0, label: 'Not listed' };
+      const rating = Number(item.rating);
+      const safeRating = Number.isFinite(rating) && rating > 0 ? Math.min(7, rating) : 0;
       return `
         <div class="grid-stat-item">
           <div class="grid-stat-header">
             <span class="grid-stat-name">${st.name}</span>
-            <span class="grid-stat-tier">${item.rating} / 7</span>
+            <span class="grid-stat-tier">${safeRating ? `${safeRating} / 7` : 'Not listed'}</span>
           </div>
           <div class="grid-meter-bar">
             <div class="grid-meter-fill" id="meter-${st.key}" style="width: 0%;"></div>
           </div>
-          <span class="grid-stat-desc">${item.label}</span>
+          <span class="grid-stat-desc">${escapeHtml(item.label || 'Not listed')}</span>
         </div>
       `;
     }).join('');
