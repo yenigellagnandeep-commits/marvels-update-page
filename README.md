@@ -39,7 +39,7 @@ A modern, fully responsive Marvel Comics wiki and character database web applica
 The application is pre-configured with a Python server:
 
 ```powershell
-cd C:\Users\yenig\.gemini\antigravity\scratch\marvel-universe-archive
+# Open a terminal in the repository root, then run:
 python server.py
 ```
 
@@ -47,6 +47,12 @@ Then open your browser and navigate to:
 ```
 http://127.0.0.1:8000/
 ```
+
+The local server listens on loopback and can be reached only from this computer. The current `characters.json` catalog provides character names and publisher metadata; richer dossier data in the `{"characters": [...]}` format shown below is also supported. Missing artwork, power ratings, and story details appear as unavailable instead of breaking the roster.
+
+### Deploying to Netlify
+
+Set `NETLIFY_AUTH_TOKEN` in your environment, then run `python deploy_netlify.py [site-name]` from the repository root. The deploy script rebuilds the ZIP package from the current files before uploading it; it never accepts the token as a command-line argument.
 
 ---
 
@@ -112,10 +118,10 @@ To add any new superhero or villain, open `data/characters.json` and append a ne
 ```
 marvel-universe-archive/
 ├── index.html                   # Semantic HTML5 Application Shell
-├── server.py                    # Local Python HTTP server with CORS headers
+├── server.py                    # Loopback-only local Python HTTP server
 ├── README.md                    # Project documentation and schema guide
 ├── data/
-│   ├── characters.json          # Pre-populated Marvel roster database
+│   ├── characters.json          # Marvel character catalog or curated dossier records
 │   └── news.json                # Latest comic & cinematic news items
 ├── css/
 │   ├── variables.css            # Dark superhero colors & tokens
