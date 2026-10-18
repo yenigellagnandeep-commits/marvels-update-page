@@ -79,26 +79,26 @@ class MarvelNewsfeed {
         <div class="news-media">
           <img 
             class="news-img" 
-            src="${item.image}" 
-            alt="${item.title}" 
+            src="${escapeHtml(item.image || 'https://images.unsplash.com/photo-1604200213928-ba3cf4fc8436?auto=format&fit=crop&w=600&q=80')}" 
+            alt="${escapeHtml(item.title || 'Marvel news')}" 
             loading="lazy"
             onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1604200213928-ba3cf4fc8436?auto=format&fit=crop&w=600&q=80';"
           />
-          <span class="news-tag">${item.tag || item.category}</span>
+          <span class="news-tag">${escapeHtml(item.tag || item.category || 'News')}</span>
         </div>
 
         <div class="news-body">
           <div class="news-meta">
-            <span>${item.date}</span>
+            <span>${escapeHtml(item.date || '')}</span>
             <span class="news-meta-dot"></span>
-            <span>${item.readTime}</span>
+            <span>${escapeHtml(item.readTime || '')}</span>
           </div>
 
-          <h3 class="news-title">${item.title}</h3>
-          <p class="news-summary">${item.summary}</p>
+          <h3 class="news-title">${escapeHtml(item.title || 'Untitled update')}</h3>
+          <p class="news-summary">${escapeHtml(item.summary || '')}</p>
 
           <a href="#news" class="news-link">
-            <span>${item.linkText || 'Read Full Report'}</span>
+            <span>${escapeHtml(item.linkText || 'Read Full Report')}</span>
             <span aria-hidden="true">→</span>
           </a>
         </div>
